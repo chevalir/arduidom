@@ -700,7 +700,7 @@ void setup() {
     /**
     ** @@RC SETUP
     **/
-    //setupHook(); // DEPUIS LA V2, VOIR LE BAS DU SKETCH POUR VOS INTEGRATIONS
+    setupHook(); // DEPUIS LA V2, VOIR LE BAS DU SKETCH POUR VOS INTEGRATIONS
     //--------------------------------------------------------------------------------------------------------------------------------------------------
     delay(1000);
     Serial.println("HELLO");
@@ -1026,7 +1026,7 @@ delay(1); // Compatibility WiFi Modules
             } ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// END OF IP
         #endif
 
-        //serialHook();  // @@RC allow custom code inside the serial management
+        serialHook();  // @@RC allow custom code inside the serial management
 
         LenSerial = 0;
         SerialDataOK = false;
@@ -1341,7 +1341,7 @@ delay(1); // Compatibility WiFi Modules
         /////////   CUSTOMS  //////////////////
         if ((millis() - TimerCustomHook) > CUSTOM_DELAY) { //Si rien non actualisé depuis 30 Secondes
             //@@RC CUSTOM // La partie Customs est désormais dans le bas du sketch !
-            //customHook();
+            customHook();
             TimerCustomHook = millis();
         }
 

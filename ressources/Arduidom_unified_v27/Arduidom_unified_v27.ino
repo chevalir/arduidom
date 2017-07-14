@@ -1149,9 +1149,10 @@ delay(1); // Compatibility WiFi Modules
 
                 if (aChange == 1 || ForceRefreshData) {
                     if (NewAValue != OldAValue[i]) {
-                        if (millis() - LastSend[i] >
+							//@@RC FIX6 CNF_NB_DPIN+i                    	
+                        if (millis() - LastSend[CNF_NB_DPIN+i] >
                             CNF_DELAY_A_SENDS) { // pas d'envoi de valeur si moins de xxx ms avant la precedente
-                            LastSend[i] = millis();
+                            LastSend[CNF_NB_DPIN+i] = millis();
                             #if (CNF_BOARD_MODEL > 10 && CNF_BOARD_MODEL <= 29)
                                 data = data + (CNF_NB_DPIN + i);
                                 data = data + "=";
@@ -1173,6 +1174,9 @@ delay(1); // Compatibility WiFi Modules
             if (EEPROM.read(CNF_NB_DPIN + CNF_NB_APIN + i) == 'c') {
                 NewCValue = CustomValue[i];
                 int cChange = 0;
+				if (ForceRefreshData) { // @@RC FIX6B if ForceRefreshData test not required
+					cChange = 1;
+				} else {                
                 if (NewCValue > OldCValue[i]) {
                     CCompare = NewCValue - OldCValue[i];
                     if (CCompare > CNF_CPINS_DELTA) {
@@ -1185,11 +1189,12 @@ delay(1); // Compatibility WiFi Modules
                         cChange = 1;
                     }
                 }
-                if (cChange == 1 || ForceRefreshData) {
-                    if (NewCValue != OldCValue[i] || ForceRefreshData) {
-                        if (millis() - LastSend[i] >
-                            CNF_DELAY_A_SENDS) { // pas d'envoi de valeur si moins de xxx ms avant la precedente
-                            LastSend[i] = millis();
+                }
+                if (cChange == 1) { //@@RC see FIX6B 
+					if ( ForceRefreshData 
+						|| ( millis() - LastSend[CNF_NB_DPIN + CNF_NB_APIN + i] > 
+						CNF_DELAY_A_SENDS) ) { // pas d'envoi de valeur si moins de xxx ms avant la precedente
+						LastSend[CNF_NB_DPIN + CNF_NB_APIN + i] = millis(); // @@RC bug FIX6C CNF_NB_DPIN + CNF_NB_APIN + i
                             #if (CNF_BOARD_MODEL > 10 && CNF_BOARD_MODEL <= 29)
                                 data = data + (CNF_NB_DPIN + CNF_NB_APIN + i);
                                 data = data + "=";
@@ -1203,7 +1208,7 @@ delay(1); // Compatibility WiFi Modules
                             #endif
                             OldCValue[i] = NewCValue;
                         }
-                    }
+                    
                 }
             }
         }

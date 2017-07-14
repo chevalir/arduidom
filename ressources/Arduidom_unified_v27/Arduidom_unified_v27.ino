@@ -434,6 +434,10 @@ void ReloadEEPROM() {
             dhtpin[i] = 0;
         }
     #endif
+	//@@RC workarround of bug FIX17 STRANGE BUG IN MEMORY see below
+	for (byte td= 0; td < CNF_NB_DPIN; td++) {
+		TimerDelays[td] = 0;
+	}
     #if (CNF_BOARD_MODEL == 22)
       for (int i = 0; i < CNF_NB_DPIN + CNF_NB_APIN + CNF_NB_CPIN; i++) {
     #else
@@ -478,7 +482,6 @@ void ReloadEEPROM() {
         #endif
 
         if (EEPROM.read(i) == 'z' || EEPROM.read(i) == '\0') {
-            TimerDelays[i] = 0;
             #if defined(DBG_PRINT_CP)
                 Serial.print(F("DIS"));
             #endif
@@ -532,21 +535,18 @@ void ReloadEEPROM() {
         }
         if (EEPROM.read(i) == 'p') {
             pinMode(i, OUTPUT);
-            TimerDelays[i] = 0;
             #if defined(DBG_PRINT_CP)
                 Serial.print(F("PWM"));
             #endif
         }
         if (EEPROM.read(i) == 'u') {
             pinMode(i, OUTPUT);
-            TimerDelays[i] = 0;
             #if defined(DBG_PRINT_CP)
                 Serial.print(F("OPUP"));
             #endif
         }
         if (EEPROM.read(i) == 'v') {
             pinMode(i, OUTPUT);
-            TimerDelays[i] = 0;
             digitalWrite(i, 1);
             #if defined(DBG_PRINT_CP)
                 Serial.print(F("OPDWN"));
@@ -554,14 +554,12 @@ void ReloadEEPROM() {
         }
         if (EEPROM.read(i) == 'x') {
             pinMode(i, OUTPUT);
-            TimerDelays[i] = 0;
             #if defined(DBG_PRINT_CP)
                 Serial.print(F("XCHG"));
             #endif
         }
         if (EEPROM.read(i) == 'b') {
             pinMode(i, OUTPUT);
-            TimerDelays[i] = 0;
             #if defined(DBG_PRINT_CP)
                 Serial.print(F("BLNK"));
             #endif

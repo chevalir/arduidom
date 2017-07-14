@@ -866,11 +866,15 @@ delay(1); // Compatibility WiFi Modules
                         check = true;
                     }
                     if (DataSerie[4] == 'H') { //// Radio Mode Chacon DIO ex:H 05580042 0100
-                        // Modifs par Chevalir
-                        DataSerie[13] = 0; // group char is not used so set 0 to limit the strtol function
-                        bool onOff = DataSerie[14] == '1';
-                        ChaconSender = strtol( &DataSerie[5], NULL, 0 );
-                        int ChaconRecevr = 10 * int(DataSerie[15] - '0') + int(DataSerie[16] - '0');
+                        // Modifs par Chevalir  @@RC FIX2
+						byte lenRequest = request.length();
+						DataSerie[lenRequest-4] = 0; // group char is not used so set 0 to limit the strtol function
+						bool onOff = DataSerie[lenRequest-3] == '1';
+						// @@RC FIX2 trim to remove zero header char : 05580042 -> 5580042 ( string started by zero not supported by strtol )
+						int notzero=4;
+						do {} while (DataSerie[++notzero] == '0' && notzero < lenRequest-4);
+						ChaconSender = strtol( &DataSerie[notzero], NULL, 0 );
+						ChaconRecevr = 10 * int(DataSerie[lenRequest-2] - '0') + int(DataSerie[lenRequest-1] - '0');
                         for (int i = 1; i <= RADIO_REPEATS; i++) {
                           mySwitch.send(ChaconSender, ChaconRecevr, onOff);
                         }

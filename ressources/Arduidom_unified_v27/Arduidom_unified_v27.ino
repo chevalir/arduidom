@@ -434,6 +434,10 @@ void ReloadEEPROM() {
             dhtpin[i] = 0;
         }
     #endif
+	//@@RC workarround of bug FIX17 STRANGE BUG IN MEMORY see below
+	for (byte td= 0; td < CNF_NB_DPIN; td++) {
+		TimerDelays[td] = 0;
+	}
     #if (CNF_BOARD_MODEL == 22)
       for (int i = 0; i < CNF_NB_DPIN + CNF_NB_APIN + CNF_NB_CPIN; i++) {
     #else
@@ -478,7 +482,6 @@ void ReloadEEPROM() {
         #endif
 
         if (EEPROM.read(i) == 'z' || EEPROM.read(i) == '\0') {
-            TimerDelays[i] = 0;
             #if defined(DBG_PRINT_CP)
                 Serial.print(F("DIS"));
             #endif
@@ -532,21 +535,18 @@ void ReloadEEPROM() {
         }
         if (EEPROM.read(i) == 'p') {
             pinMode(i, OUTPUT);
-            TimerDelays[i] = 0;
             #if defined(DBG_PRINT_CP)
                 Serial.print(F("PWM"));
             #endif
         }
         if (EEPROM.read(i) == 'u') {
             pinMode(i, OUTPUT);
-            TimerDelays[i] = 0;
             #if defined(DBG_PRINT_CP)
                 Serial.print(F("OPUP"));
             #endif
         }
         if (EEPROM.read(i) == 'v') {
             pinMode(i, OUTPUT);
-            TimerDelays[i] = 0;
             digitalWrite(i, 1);
             #if defined(DBG_PRINT_CP)
                 Serial.print(F("OPDWN"));
@@ -554,14 +554,12 @@ void ReloadEEPROM() {
         }
         if (EEPROM.read(i) == 'x') {
             pinMode(i, OUTPUT);
-            TimerDelays[i] = 0;
             #if defined(DBG_PRINT_CP)
                 Serial.print(F("XCHG"));
             #endif
         }
         if (EEPROM.read(i) == 'b') {
             pinMode(i, OUTPUT);
-            TimerDelays[i] = 0;
             #if defined(DBG_PRINT_CP)
                 Serial.print(F("BLNK"));
             #endif
@@ -702,7 +700,7 @@ void setup() {
     /**
     ** @@RC SETUP
     **/
-    //setupHook(); // DEPUIS LA V2, VOIR LE BAS DU SKETCH POUR VOS INTEGRATIONS
+    setupHook(); // DEPUIS LA V2, VOIR LE BAS DU SKETCH POUR VOS INTEGRATIONS
     //--------------------------------------------------------------------------------------------------------------------------------------------------
     delay(1000);
     Serial.println("HELLO");
@@ -868,11 +866,15 @@ delay(1); // Compatibility WiFi Modules
                         check = true;
                     }
                     if (DataSerie[4] == 'H') { //// Radio Mode Chacon DIO ex:H 05580042 0100
-                        // Modifs par Chevalir
-                        DataSerie[13] = 0; // group char is not used so set 0 to limit the strtol function
-                        bool onOff = DataSerie[14] == '1';
-                        ChaconSender = strtol( &DataSerie[5], NULL, 0 );
-                        int ChaconRecevr = 10 * int(DataSerie[15] - '0') + int(DataSerie[16] - '0');
+                        // Modifs par Chevalir  @@RC FIX2
+						byte lenRequest = request.length();
+						DataSerie[lenRequest-4] = 0; // group char is not used so set 0 to limit the strtol function
+						bool onOff = DataSerie[lenRequest-3] == '1';
+						// @@RC FIX2 trim to remove zero header char : 05580042 -> 5580042 ( string started by zero not supported by strtol )
+						int notzero=4;
+						do {} while (DataSerie[++notzero] == '0' && notzero < lenRequest-4);
+						ChaconSender = strtol( &DataSerie[notzero], NULL, 0 );
+						ChaconRecevr = 10 * int(DataSerie[lenRequest-2] - '0') + int(DataSerie[lenRequest-1] - '0');
                         for (int i = 1; i <= RADIO_REPEATS; i++) {
                           mySwitch.send(ChaconSender, ChaconRecevr, onOff);
                         }
@@ -1024,7 +1026,7 @@ delay(1); // Compatibility WiFi Modules
             } ////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////// END OF IP
         #endif
 
-        //serialHook();  // @@RC allow custom code inside the serial management
+        serialHook();  // @@RC allow custom code inside the serial management
 
         LenSerial = 0;
         SerialDataOK = false;
@@ -1147,9 +1149,10 @@ delay(1); // Compatibility WiFi Modules
 
                 if (aChange == 1 || ForceRefreshData) {
                     if (NewAValue != OldAValue[i]) {
-                        if (millis() - LastSend[i] >
+							//@@RC FIX6 CNF_NB_DPIN+i                    	
+                        if (millis() - LastSend[CNF_NB_DPIN+i] >
                             CNF_DELAY_A_SENDS) { // pas d'envoi de valeur si moins de xxx ms avant la precedente
-                            LastSend[i] = millis();
+                            LastSend[CNF_NB_DPIN+i] = millis();
                             #if (CNF_BOARD_MODEL > 10 && CNF_BOARD_MODEL <= 29)
                                 data = data + (CNF_NB_DPIN + i);
                                 data = data + "=";
@@ -1171,6 +1174,9 @@ delay(1); // Compatibility WiFi Modules
             if (EEPROM.read(CNF_NB_DPIN + CNF_NB_APIN + i) == 'c') {
                 NewCValue = CustomValue[i];
                 int cChange = 0;
+				if (ForceRefreshData) { // @@RC FIX6B if ForceRefreshData test not required
+					cChange = 1;
+				} else {                
                 if (NewCValue > OldCValue[i]) {
                     CCompare = NewCValue - OldCValue[i];
                     if (CCompare > CNF_CPINS_DELTA) {
@@ -1183,11 +1189,12 @@ delay(1); // Compatibility WiFi Modules
                         cChange = 1;
                     }
                 }
-                if (cChange == 1 || ForceRefreshData) {
-                    if (NewCValue != OldCValue[i] || ForceRefreshData) {
-                        if (millis() - LastSend[i] >
-                            CNF_DELAY_A_SENDS) { // pas d'envoi de valeur si moins de xxx ms avant la precedente
-                            LastSend[i] = millis();
+                }
+                if (cChange == 1) { //@@RC see FIX6B 
+					if ( ForceRefreshData 
+						|| ( millis() - LastSend[CNF_NB_DPIN + CNF_NB_APIN + i] > 
+						CNF_DELAY_A_SENDS) ) { // pas d'envoi de valeur si moins de xxx ms avant la precedente
+						LastSend[CNF_NB_DPIN + CNF_NB_APIN + i] = millis(); // @@RC bug FIX6C CNF_NB_DPIN + CNF_NB_APIN + i
                             #if (CNF_BOARD_MODEL > 10 && CNF_BOARD_MODEL <= 29)
                                 data = data + (CNF_NB_DPIN + CNF_NB_APIN + i);
                                 data = data + "=";
@@ -1201,7 +1208,7 @@ delay(1); // Compatibility WiFi Modules
                             #endif
                             OldCValue[i] = NewCValue;
                         }
-                    }
+                    
                 }
             }
         }
@@ -1334,7 +1341,7 @@ delay(1); // Compatibility WiFi Modules
         /////////   CUSTOMS  //////////////////
         if ((millis() - TimerCustomHook) > CUSTOM_DELAY) { //Si rien non actualisé depuis 30 Secondes
             //@@RC CUSTOM // La partie Customs est désormais dans le bas du sketch !
-            //customHook();
+            customHook();
             TimerCustomHook = millis();
         }
 

@@ -45,7 +45,7 @@
 //
 // ********* CONFIGURATION DE GESTION DE SONDES DHT 11 / 22 *********
 //
-#define CNF_DHT 1 // Mettre à 0 pour desactiver les DHT pour gagner en espace Programme/Ram surtout sur les petits arduino ( 4,9% Firmware / 6,3% RAM sur un UNO)
+#define CNF_DHT 0 // Mettre à 0 pour desactiver les DHT pour gagner en espace Programme/Ram surtout sur les petits arduino ( 4,9% Firmware / 6,3% RAM sur un UNO)
 #define CNF_DHT11_COMPATIBILITY 0 // Mettre à 1 pour activer la compatibilité des Sondes DHT 11, Attention, un delai de 2 secondes par sonde Dht est ajouté !!!
 //
 //
@@ -83,12 +83,14 @@
 //--------------------------------------------------------------------------------------------------------------------------------------------------
 // PARTIE DEFINITION
 // Vos #define et autre ici
-
-
-
-
-
-
+/**
+** @@RC 
+**/
+#include "CustomDef.h"
+bool RFGroup = false;
+byte RFOnOff = 0;
+int RFDevice = 0;
+#define NETCODE //
 
 /////////// /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\ /!\
 ///////////
@@ -178,7 +180,7 @@
 #elif defined(__AVR_ATmega328P__)
     #define CNF_NB_DPIN 14
     #define CNF_NB_APIN 6
-    #define CNF_NB_CPIN 8 // Extensible à 128 Maximum
+    #define CNF_NB_CPIN 32 // Extensible à 128 Maximum @@RC set to 32
 #elif defined(__AVR_ATmega32U4__)
     #define CNF_NB_DPIN 14
     #define CNF_NB_APIN 6
@@ -1366,11 +1368,31 @@ if (Serial.available() > 0) serialEvent();
 // Votre partie "setup" perso ici (ne s'executera qu'une fois au demarrage de l'arduino)
 //
 
+
+/**
+** Add your custom code here,
+** Method call inside the setup
+**
+** @@RC setupHook
+**/
 void setupHook() {
+	// init CustomValues
+	for ( int ic = 0 ; ic < CNF_NB_CPIN ; ic++ ) {
+		CustomValue[ic] = 0.0;
+		OldCValue[ic] = CustomValue[ic];
+	}
+	// init lastvalue
+	for ( int ii = 0; ii < CNF_NB_DPIN + CNF_NB_APIN + CNF_NB_CPIN; ii++ ) {
+		LastSend[ii] = 0;
+	}
+	//@@RC workarround of bug FIX17 STRANGE BUG IN MEMORY
+	for (byte td= 0; td < CNF_NB_DPIN; td++) {
+		TimerDelays[td] =0;
+	}
 
 
+} // setupHook
 
-}
 //
 // Add your custom code here, Method call inside the main loop to manage custom values
 //
@@ -1386,6 +1408,10 @@ void customHook () {
 
 
 }
+
+
+
+
 
 //
 // Add your custom code here, Method call when serial data received.
@@ -1403,13 +1429,81 @@ void serialHook() {
 // Add your custom code here, Method call inside the RF reception
 // return true if the normal process can be called
 //
-
 bool rfReceptionHook() {
-    bool ret = true;
+	// @@RC addons for CabraNode433
+	bool ret = true;
+	if ( (RFData > RF_PROBE_CHACON_OFFSET) 
+		&& ((RFData / 1000) == RF_PROBE_CHACON_ID)) {
+		
+		parseRFAdrr(RFAddr);
+		// Serial.print(">>RFC:");
+		// GROUP FLAG USED TO DEFINE TYPE OFF MESSAGE STATUS OR TEMP/HUMIDITY
+		if (!RFGroup) { 
+			// message should contain temperature/humidity values  
+			float tempdata = RFData - RF_PROBE_CHACON_ID_MASK;
+			tempdata /= 10;
+			int probeID = RFDevice + INDEX_CUSTOM_RF_PROBES;
+			/*Serial.print("PID:"); 					   
+			Serial.print(probeID);
 
+			Serial.print(":T:");*/
 
+			// manage NEG/POS value
+			if ( RFOnOff == 1 ) { 
+				// positive value
+				CustomValue[CUSTOM_PROBE_OFFSET + probeID] = tempdata;
+				// Serial.print(tempdata);
+			} else { 
+				// negative value
+				if (tempdata == 0) {
+					// -0 sent by the node to indicate reading error
+					// nothing to do.
+					// Serial.print("error001");
+				} else {
+					// Serial.print(-tempdata);
+					CustomValue[CUSTOM_PROBE_OFFSET + probeID] = 0 - tempdata;
+				}
+			}
+			/* Serial.println("<<");
+			   Serial.print("Custom[" + String (CUSTOM_PROBE_OFFSET + probeID, DEC) + "]=");
+			   Serial.print(CustomValue[CUSTOM_PROBE_OFFSET + probeID]);
+			   Serial.println(""); */
+		} else { 
+			// STATUS MESSAGE sent by the node   
+			unsigned long fdata = RFData - RF_PROBE_CHACON_ID_MASK;
+			int statusPin = fdata / 10; // remove decimal part
+			// Serial.print(statusPin);
+			int status = fdata - (statusPin * 10);
+			// Serial.print(":S:"); Serial.print(status);
+			CustomValue[CUSTOM_STATUS_OFFSET + statusPin] = status;
+			// Serial.println("<<");
 
+		}
+		RAZRadio = 0;
+		RFDataLastSend = RFData;
+		RFAddrLastSend = RFAddr;
+		RFProtocolLastSend = RFProtocol;
+		LastRadioMessage = millis();
+		ret = false;
+	}
+	return ret;
+}
 
-
-    return ret;
+/**
+* parse Chacon value to extract Group, OnOff, Device
+*
+*/
+void parseRFAdrr (unsigned long lRFAddr) {
+	RFGroup = lRFAddr > 999;
+	if (RFGroup) {
+		lRFAddr -= 1000;
+	}
+	RFDevice =  lRFAddr % 100;
+	RFOnOff = (lRFAddr - RFDevice) / 100;
+	/*
+	Serial.println("RFData: " + String(RFData)
+		+" RFAddr: " + String(RFAddr)
+		+" group:" + String(RFGroup)
+		+" device: " + String(RFDevice)
+		+" onOff: " + String(RFOnOff) ); */
 }
